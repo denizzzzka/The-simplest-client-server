@@ -17,59 +17,135 @@ void do_thing_client_UDP(int, struct sockaddr_in);
 void do_thing_server_UDP(int);
 int start_game();
 
+// error handlers
+
+int Socket(int domain, int type, int protocol) {
+    int res = socket(domain, type, protocol);
+    if (res == -1) {
+        perror("socket failed");
+        exit(EXIT_FAILURE);
+    }
+    return res;
+}
+
+void Bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+    int res = bind(sockfd, addr, addrlen);
+    if (res == -1) {
+        perror("bind failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void Listen(int sockfd, int backlog) {
+    int res = listen(sockfd, backlog);
+    if (res == -1) {
+        perror("listen failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+    int res = accept(sockfd, addr, addrlen);
+    if (res == -1) {
+        perror("accept failed");
+        exit(EXIT_FAILURE);
+    }
+    return res;
+}
+
+void Connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+    int res = connect(sockfd, addr, addrlen);
+    if (res == -1) {
+        perror("connect failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void Inet_pton(int af, const char *src, void *dst) {
+    int res = inet_pton(af, src, dst);
+    if (res == 0) {
+        printf("inet_pton failed: src does not contain a character"
+            " string representing a valid network address in the specified"
+            " address family\n");
+        exit(EXIT_FAILURE);
+    }
+    if (res == -1) {
+        perror("inet_pton failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void Shutdown(int sockfd, int flag) {
+    int res = shutdown(sockfd, flag);
+    if (res == -1) {
+        perror("shutdown failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void Close(int sockfd) {
+    int res = close(sockfd);
+    if (res == -1) {
+        perror("close failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
+// actual program
+
 void server_TCP() {
-    int server = socket(AF_INET, SOCK_STREAM, 0);
+    int server = Socket(AF_INET, SOCK_STREAM, 0);
     
     struct sockaddr_in adr = {0};
     adr.sin_family = AF_INET;
     adr.sin_port = htons(PORT_NUM);
-    bind(server, (struct sockaddr *) &adr, sizeof(adr));
+    Bind(server, (struct sockaddr *) &adr, sizeof(adr));
 
-    listen(server, 1);
+    Listen(server, 1);
     socklen_t adrlen = sizeof (adr);
-    int fd = accept(server, (struct sockaddr *) &adr, &adrlen);
+    int fd = Accept(server, (struct sockaddr *) &adr, &adrlen);
+    
 
     do_thing_server_TCP(fd);
-    shutdown(fd, SHUT_RDWR);
-    shutdown(server, SHUT_RDWR);
+    Shutdown(fd, SHUT_RDWR);
+    Shutdown(server, SHUT_RDWR);
 }
 
 void server_UDP() {
-    int server = socket(AF_INET, SOCK_DGRAM, 0);
+    int server = Socket(AF_INET, SOCK_DGRAM, 0);
 
     struct sockaddr_in adr = {0};
     adr.sin_family = AF_INET;
     adr.sin_port = htons(PORT_NUM);
-    bind(server, (struct sockaddr *) &adr, sizeof(adr));
+    Bind(server, (struct sockaddr *) &adr, sizeof(adr));
 
     do_thing_server_UDP(server);
-    shutdown(server, SHUT_RDWR);
+    Close(server);
 }
 
 void client_TCP() {
-    int client = socket(AF_INET, SOCK_STREAM, 0);
+    int client = Socket(AF_INET, SOCK_STREAM, 0);
 
     struct sockaddr_in adr = {0};
     adr.sin_family = AF_INET;
     adr.sin_port = htons(PORT_NUM);
-    inet_pton(AF_INET, IP_NUM, &adr.sin_addr);
+    Inet_pton(AF_INET, IP_NUM, &adr.sin_addr);
 
-    connect(client, (struct sockaddr *) &adr, sizeof adr);
+    Connect(client, (struct sockaddr *) &adr, sizeof adr);
     do_thing_client_TCP(client);
-    shutdown(client, SHUT_RDWR);
+    Shutdown(client, SHUT_RDWR);
 }
 
 void client_UDP() {
-    int client = socket(AF_INET, SOCK_DGRAM, 0);
+    int client = Socket(AF_INET, SOCK_DGRAM, 0);
     
-    struct sockaddr_in adr = {0};
+    struct sockaddr_in adr = {0}; //server's adr
     adr.sin_family = AF_INET;
-    adr.sin_port = htons(PORT_NUM + 1);
-    inet_pton(AF_INET, IP_NUM, &adr.sin_addr);
-    bind(client, (struct sockaddr *) &adr, sizeof(adr));
+    adr.sin_port = htons(PORT_NUM); //server's port
+    Inet_pton(AF_INET, IP_NUM, &adr.sin_addr); //it doesn't matter, we have 0
 
     do_thing_client_UDP(client, adr);
-    shutdown(client, SHUT_RDWR);
+    Close(client);
 }
 
 void do_thing_server_TCP(int server) {
@@ -78,7 +154,7 @@ void do_thing_server_TCP(int server) {
     while (1) {
         int buf, hit = 0;
         read(server, &buf, sizeof(buf));
-        printf("Number from clien %d\nServer number %d\n", buf, secret_num);
+        printf("Number from client %d\nServer number %d\n", buf, secret_num);
 
         if (buf == secret_num) {
             hit = 1;
@@ -100,7 +176,7 @@ void do_thing_server_UDP(int server) {
         int buf, hit = 0;
         int adr_len = sizeof(adr);
         recvfrom(server, &buf, sizeof(buf), 0, (struct sockaddr *) &adr, &adr_len);
-        printf("Number from clien %d\nYou number %d\n", buf, secret_num);
+        printf("Number from client %d\nYou number %d\n", buf, secret_num);
 
         if (buf == secret_num) {
             hit = 1;
@@ -114,26 +190,6 @@ void do_thing_server_UDP(int server) {
     }
 }
 
-void do_thing_client_UDP(int client, struct sockaddr_in adr) {
-    printf("Hi! you are client\nTry to guess server number\n\n");
-    adr.sin_port = htons(PORT_NUM);
-
-    while (1) {
-        int buf;
-        int adr_len = sizeof(adr);
-        scanf("%d", &buf);
-
-        sendto(client, &buf, sizeof(buf), 0, (struct sockaddr *) &adr, adr_len);
-        recvfrom(client, &buf, sizeof(buf), 0, (struct sockaddr *) &adr, &adr_len);
-        if (buf) {
-            printf("You guessed!!!\nClient shut down\n");
-            return;
-        } else {
-            printf("You missed\n\n");
-        }
-    }
-}
-
 void do_thing_client_TCP(int client) {
     printf("Hi! you are client\nTry to guess server number\n\n");
 
@@ -143,6 +199,25 @@ void do_thing_client_TCP(int client) {
         write(client, &buf, sizeof(buf));
         read(client, &buf, sizeof(buf));
 
+        if (buf) {
+            printf("You guessed!!!\nClient shut down\n");
+            return;
+        } else {
+            printf("You missed\n\n");
+        }
+    }
+}
+
+void do_thing_client_UDP(int client, struct sockaddr_in adr) {
+    printf("Hi! you are client\nTry to guess server number\n\n");
+
+    while (1) {
+        int buf;
+        int adr_len = sizeof(adr);
+        scanf("%d", &buf);
+
+        sendto(client, &buf, sizeof(buf), 0, (struct sockaddr *) &adr, adr_len);
+        recvfrom(client, &buf, sizeof(buf), 0, (struct sockaddr *) &adr, &adr_len);
         if (buf) {
             printf("You guessed!!!\nClient shut down\n");
             return;
